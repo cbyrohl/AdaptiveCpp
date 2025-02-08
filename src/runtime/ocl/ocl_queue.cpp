@@ -125,6 +125,8 @@ ocl_queue::ocl_queue(ocl_hardware_manager* hw_manager, std::size_t device_index)
                    error_info{"ocl_queue: Couldn't construct backend queue",
                               error_code{"CL", err}});
   }
+
+  _reflection_map = glue::jit::construct_default_reflection_map(dev_ctx);
 }
 
 ocl_queue::~ocl_queue() {}
@@ -482,10 +484,17 @@ result ocl_queue::submit_sscp_kernel_from_code_object(
   _config.set_build_option(
       kernel_build_option::spirv_dynamic_local_mem_allocation_size,
       local_mem_size);
-  if(hw_ctx->has_intel_extension_profile()) {
-    _config.set_build_flag(
-      kernel_build_flag::spirv_enable_intel_llvm_spirv_options);
-  }
+  
+  // Not all OpenCL implementations support these extensions,
+  // however if user code doesn't need them, then the compiler should in theory
+  // not generate code that requires them. This should allow us to
+  // run on all devices that *can* support this particular kernel.
+  //
+  // We may have to revisit this handling if there are any issues reported
+  // with OpenCL implementations that are not from Intel.
+  _config.set_build_flag(
+    kernel_build_flag::spirv_enable_intel_llvm_spirv_options);
+
 
   // TODO: Enable this if we are on Intel
   // config.set_build_flag(kernel_build_flag::spirv_enable_intel_llvm_spirv_options);
@@ -517,10 +526,11 @@ result ocl_queue::submit_sscp_kernel_from_code_object(
     if(kernel_names.size() == 1) {
       err = glue::jit::dead_argument_elimination::compile_kernel(
           translator.get(), hcf_object, selected_image_name, _config,
-          binary_configuration_id, compiled_image);
+          binary_configuration_id, _reflection_map, compiled_image);
     } else {
-      err = glue::jit::compile(translator.get(),
-        hcf_object, selected_image_name, _config, compiled_image);
+      err =
+          glue::jit::compile(translator.get(), hcf_object, selected_image_name,
+                             _config, _reflection_map, compiled_image);
     }
     
     if(!err.is_success()) {

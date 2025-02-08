@@ -46,6 +46,15 @@ void for_each_exported_symbol_list(const common::hcf_container& hcf, F&& handler
 
 }
 
+extern "C" void __acpp_register_hcf(const char* hcf, std::size_t size) {
+  std::string hcf_data{hcf, size};
+  hcf_cache::get().register_hcf_object(common::hcf_container{hcf_data});
+}
+
+extern "C" void __acpp_unregister_hcf(std::size_t hcf_object_id) {
+  hcf_cache::get().unregister_hcf_object(hcf_object_id);
+}
+
 hcf_kernel_info::hcf_kernel_info(
     hcf_object_id id, const common::hcf_container::node *kernel_node)
     : _id{id} {
@@ -104,6 +113,8 @@ hcf_kernel_info::hcf_kernel_info(
           } else if(entry.first == "fcall_specialized_config") {
             _known_annotations.back().push_back(
                 annotation_type::fcall_specialized_config);
+          } else if(entry.first == "restrict") {
+            _known_annotations.back().push_back(annotation_type::noalias);
           } else {
             _string_annotations.back().push_back(entry.first);
           }

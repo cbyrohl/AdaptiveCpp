@@ -201,6 +201,15 @@ namespace {
   }
 
   template<class T, std::enable_if_t<std::is_integral_v<T>,int> = 0>
+  inline T ref_ctz(T x) noexcept {
+    if(x==0){return sizeof(T)*CHAR_BIT;}
+    std::bitset<sizeof(T)*CHAR_BIT> bset(x);
+    int idx = 0;
+    while(!bset[idx]){idx++;}
+    return idx;
+  }
+
+  template<class T, std::enable_if_t<std::is_integral_v<T>,int> = 0>
   inline T ref_clz(T x) noexcept {
     if(x==0){return sizeof(T)*CHAR_BIT;}
     std::bitset<sizeof(T)*CHAR_BIT> bset(x);
@@ -390,7 +399,7 @@ BOOST_AUTO_TEST_CASE_TEMPLATE(builtin_int_basic, T, math_test_genints::type) {
 
   namespace s = cl::sycl;
 
-  constexpr int FUN_COUNT = 5;
+  constexpr int FUN_COUNT = 6;
 
   // build inputs
 
@@ -416,6 +425,7 @@ BOOST_AUTO_TEST_CASE_TEMPLATE(builtin_int_basic, T, math_test_genints::type) {
       acc[i++] = s::abs(acc[0]);
       acc[i++] = s::min(acc[0], acc[1]);
       acc[i++] = s::max(acc[0], acc[1]);
+      acc[i++] = s::ctz(acc[0]);
       acc[i++] = s::clz(acc[0]);
       acc[i++] = s::popcount(acc[0]);
     });
@@ -434,7 +444,21 @@ BOOST_AUTO_TEST_CASE_TEMPLATE(builtin_int_basic, T, math_test_genints::type) {
         BOOST_TEST(comp(acc[i++], c) == comp(acc[0], c));
       BOOST_TEST(comp(acc[i++], c) == std::min(comp(acc[0], c), comp(acc[1], c)));
       BOOST_TEST(comp(acc[i++], c) == std::max(comp(acc[0], c), comp(acc[1], c)));
-      BOOST_TEST(comp(acc[i++], c) == ref_clz(comp(acc[0], c)));
+      BOOST_TEST(comp(acc[i++], c) == ref_ctz(comp(acc[0], c)));
+      // It seems that certain LLVM/ROCm versions in CI miscompile this test in SMCP
+      // mode. Temporarily disable in HIP SMCP. We still test with SSCP on AMD,
+      // and with SMCP on non-AMD devices, including explicit multipass builds
+      // were both CUDA and HIP are targeted in a single build.
+#ifdef __ACPP_ENABLE_HIP_TARGET__
+      bool enable_clz = queue.get_device().get_backend() != s::backend::hip;
+#else
+      bool enable_clz = true;
+#endif
+      if(enable_clz){
+        BOOST_TEST(comp(acc[i++], c) == ref_clz(comp(acc[0], c)));
+      } else {
+        i++;
+      }
       BOOST_TEST(comp(acc[i++], c) == ref_popcount(comp(acc[0], c)));
     }
   }

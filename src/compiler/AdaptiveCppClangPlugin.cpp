@@ -12,6 +12,7 @@
 
 #include "hipSYCL/compiler/FrontendPlugin.hpp"
 #include "hipSYCL/compiler/GlobalsPruningPass.hpp"
+#include "hipSYCL/compiler/SMCPCompatPass.hpp"
 #include "hipSYCL/compiler/cbs/PipelineBuilder.hpp"
 
 
@@ -44,6 +45,7 @@
 
 #if LLVM_VERSION_MAJOR < 16
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/IR/LegacyPassManager.h"
 #endif
 
 namespace hipsycl {
@@ -125,6 +127,7 @@ extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo llvmGetPassPluginIn
           // Note: for Clang < 12, this EP is not called for O0, but the new PM isn't
           // really used there anyways..
           PB.registerOptimizerLastEPCallback([](llvm::ModulePassManager &MPM, OptLevel) {
+            MPM.addPass(hipsycl::compiler::SMCPCompatPass{});
             MPM.addPass(hipsycl::compiler::GlobalsPruningPass{});
           });
 #ifdef HIPSYCL_WITH_REFLECTION_BUILTINS
