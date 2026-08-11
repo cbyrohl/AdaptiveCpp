@@ -112,9 +112,16 @@ struct EmitContext {
   std::string name;
 };
 
+llvm::Function* getDirectCallee(const llvm::CallInst* CI) {
+  if (!CI)
+    return nullptr;
+  return llvm::dyn_cast<llvm::Function>(
+      CI->getCalledOperand()->stripPointerCasts());
+}
+
 std::optional<EmitContext> initEmitContext(const llvm::CallInst* CI, std::string& errorStr) {
   errorStr.clear();
-  const llvm::Function* F = CI ? CI->getCalledFunction() : nullptr;
+  const llvm::Function* F = getDirectCallee(CI);
   if (!F) {
     errorStr = "CallInst has no called function";
     return std::nullopt;
@@ -1236,9 +1243,15 @@ void MetalEmitter::emitGEPInstruction(const GetElementPtrInst* GEP, const std::s
 }
 
 bool MetalEmitter::emitCallInstruction(const CallInst* CI, const std::string& name, int level) {
-  Function *callee = CI->getCalledFunction();
+  Function *callee = getDirectCallee(CI);
   if (!callee) {
     errorMsg = "Error: Indirect call not supported: " + instToString(*CI);
+    return false;
+  }
+  if (CI->getFunctionType() != callee->getFunctionType()) {
+    errorMsg = "Error: Direct call signature mismatch after Metal IR "
+               "normalization: " +
+               instToString(*CI);
     return false;
   }
 
@@ -1602,7 +1615,7 @@ void MetalEmitter::analyzeCallInsts() {
         if (!CI) {
           continue;
         }
-        Function *Callee = CI->getCalledFunction();
+        Function *Callee = getDirectCallee(CI);
         if (!Callee) {
           continue;
         }
@@ -1675,7 +1688,7 @@ std::unordered_map<Function*, std::vector<Function*>> MetalEmitter::buildCallGra
           continue;
         }
 
-        Function* Callee = CI->getCalledFunction();
+        Function* Callee = getDirectCallee(CI);
         if (!Callee || Callee->isDeclaration()) {
           continue;
         }

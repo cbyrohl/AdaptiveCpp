@@ -1,0 +1,18 @@
+#include "metal_direct_call_signature.hpp"
+
+// Keep an isomorphic aggregate in the module that supplies the external
+// makeMetalAggregate() definition.
+struct UnrelatedTwoFloat {
+  float first;
+  float second;
+};
+
+SYCL_EXTERNAL __attribute__((noinline)) UnrelatedTwoFloat
+makeUnrelatedMetalAggregate(float value) {
+  return {value + 10.0f, value + 20.0f};
+}
+
+SYCL_EXTERNAL __attribute__((noinline)) MetalAggregateResult
+makeMetalAggregate(float value) {
+  return {value + 1.0f, value + 2.0f};
+}

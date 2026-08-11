@@ -70,6 +70,127 @@ namespace compiler {
 
 namespace {
 
+bool haveEquivalentAggregateShape(llvm::Type *Source, llvm::Type *Target) {
+  if (Source == Target)
+    return true;
+
+  auto *SourceStruct = llvm::dyn_cast<llvm::StructType>(Source);
+  auto *TargetStruct = llvm::dyn_cast<llvm::StructType>(Target);
+  if (SourceStruct || TargetStruct) {
+    if (!SourceStruct || !TargetStruct || SourceStruct->isOpaque() ||
+        TargetStruct->isOpaque() ||
+        SourceStruct->isPacked() != TargetStruct->isPacked() ||
+        SourceStruct->getNumElements() != TargetStruct->getNumElements())
+      return false;
+
+    for (unsigned I = 0; I < SourceStruct->getNumElements(); ++I) {
+      if (!haveEquivalentAggregateShape(SourceStruct->getElementType(I),
+                                        TargetStruct->getElementType(I)))
+        return false;
+    }
+    return true;
+  }
+
+  auto *SourceArray = llvm::dyn_cast<llvm::ArrayType>(Source);
+  auto *TargetArray = llvm::dyn_cast<llvm::ArrayType>(Target);
+  return SourceArray && TargetArray &&
+         SourceArray->getNumElements() == TargetArray->getNumElements() &&
+         haveEquivalentAggregateShape(SourceArray->getElementType(),
+                                      TargetArray->getElementType());
+}
+
+llvm::Value *rebuildAggregate(llvm::IRBuilder<> &Builder, llvm::Value *Source,
+                              llvm::Type *TargetType) {
+  if (Source->getType() == TargetType)
+    return Source;
+
+  llvm::Value *Result = llvm::PoisonValue::get(TargetType);
+  unsigned NumElements = 0;
+  if (auto *Struct = llvm::dyn_cast<llvm::StructType>(TargetType))
+    NumElements = Struct->getNumElements();
+  else
+    NumElements = llvm::cast<llvm::ArrayType>(TargetType)->getNumElements();
+
+  if (NumElements == 0)
+    return llvm::Constant::getNullValue(TargetType);
+
+  for (unsigned I = 0; I < NumElements; ++I) {
+    llvm::Value *Element = Builder.CreateExtractValue(Source, I);
+    llvm::Type *TargetElementType =
+        llvm::ExtractValueInst::getIndexedType(TargetType, {I});
+    Element = rebuildAggregate(Builder, Element, TargetElementType);
+    Result = Builder.CreateInsertValue(Result, Element, I);
+  }
+  return Result;
+}
+
+void normalizeDirectCallSignatures(llvm::Module &M) {
+  llvm::SmallVector<llvm::CallInst *> Calls;
+  for (llvm::Function &F : M)
+    for (llvm::BasicBlock &BB : F)
+      for (llvm::Instruction &I : BB)
+        if (auto *Call = llvm::dyn_cast<llvm::CallInst>(&I))
+          Calls.push_back(Call);
+
+  for (llvm::CallInst *Call : Calls) {
+    if (Call->isMustTailCall())
+      continue;
+
+    auto *Callee = llvm::dyn_cast<llvm::Function>(
+        Call->getCalledOperand()->stripPointerCasts());
+    if (!Callee || Call->getFunctionType() == Callee->getFunctionType())
+      continue;
+
+    llvm::FunctionType *CallType = Call->getFunctionType();
+    llvm::FunctionType *CalleeType = Callee->getFunctionType();
+    if (CallType->isVarArg() != CalleeType->isVarArg() ||
+        Call->getCallingConv() != Callee->getCallingConv() ||
+        CallType->getNumParams() != CalleeType->getNumParams())
+      continue;
+
+    bool ParametersMatch = true;
+    for (unsigned I = 0; I < CallType->getNumParams(); ++I)
+      ParametersMatch &=
+          CallType->getParamType(I) == CalleeType->getParamType(I);
+    if (!ParametersMatch ||
+        !haveEquivalentAggregateShape(CallType->getReturnType(),
+                                      CalleeType->getReturnType()))
+      continue;
+
+    // LLVM identified structs are nominally typed. After SSCP IR linking and
+    // specialization, a direct call can therefore retain an equivalent
+    // aggregate return type that is not identical to the callee declaration.
+    llvm::SmallVector<llvm::Value *> Arguments(Call->args());
+    llvm::SmallVector<llvm::OperandBundleDef> Bundles;
+    Call->getOperandBundlesAsDefs(Bundles);
+    llvm::IRBuilder<> Builder{Call};
+    llvm::CallInst *NormalizedCall = Builder.CreateCall(
+        CalleeType, Callee, Arguments, Bundles, Call->getName() + ".normalized");
+    NormalizedCall->setCallingConv(Call->getCallingConv());
+    // Rebuilding an aggregate inserts instructions after the call, so an
+    // ordinary tail-call hint is no longer valid. `musttail` calls were
+    // excluded above; preserve only an explicit `notail` marker.
+    const llvm::CallInst::TailCallKind TailKind = Call->getTailCallKind();
+    NormalizedCall->setTailCallKind(TailKind == llvm::CallInst::TCK_Tail
+                                        ? llvm::CallInst::TCK_None
+                                        : TailKind);
+    NormalizedCall->setAttributes(Call->getAttributes());
+    NormalizedCall->copyIRFlags(Call);
+    NormalizedCall->setDebugLoc(Call->getDebugLoc());
+    NormalizedCall->copyMetadata(*Call);
+
+    // Aggregate values cannot be bitcast. Preserve the call-site result type
+    // by rebuilding the equivalent value field by field.
+    llvm::Value *Replacement =
+        rebuildAggregate(Builder, NormalizedCall, Call->getType());
+    if (auto *ReplacementInstruction =
+            llvm::dyn_cast<llvm::Instruction>(Replacement))
+      ReplacementInstruction->takeName(Call);
+    Call->replaceAllUsesWith(Replacement);
+    Call->eraseFromParent();
+  }
+}
+
 // these are remapped for f32 and f64
 static constexpr std::array remapped_llvm_math_builtins = {
   "sin", "cos", "tan", "sqrt",
@@ -478,6 +599,7 @@ bool LLVMToMetalTranslator::isKernelAfterFlavoring(llvm::Function& F) {
 }
 
 bool LLVMToMetalTranslator::prepareBackendFlavor(llvm::Module& M) {
+  normalizeDirectCallSignatures(M);
   return true;
 }
 
@@ -556,6 +678,11 @@ bool LLVMToMetalTranslator::translateToBackendFormat(llvm::Module& FlavoredModul
     registerError("LLVMToMetal: Failed to prepare module for Metal translation");
     return false;
   }
+
+  // Linking and optimization above can introduce new direct calls between
+  // nominally distinct but layout-equivalent aggregate return types. Run the
+  // idempotent legalization again on the final IR consumed by MetalEmitter.
+  normalizeDirectCallSignatures(FlavoredModule);
 
   std::unordered_set<std::string> kernelNames(KernelNames.begin(), KernelNames.end());
 
