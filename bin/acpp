@@ -1908,6 +1908,72 @@ class omp_sequential_invocation:
     return self._linker_args
 
 
+def sscp_fast_math_enabled(arguments):
+  # The JIT option applies all fast-math assumptions, including to device
+  # libraries. Do not use it for a partially disabled fast-math mode; the
+  # frontend's individual IR flags still describe the permitted optimizations.
+  # Clang only interprets -Ofast as -ffast-math if it is the effective -O level.
+  optimization = next((arg for arg in reversed(arguments)
+                       if re.fullmatch(r"-O(?:[0-9]+|fast|g|s|z)?", arg)), None)
+  enabled = False
+  restrictions = set()
+  individual_options = {
+    "honor-nans": ("nans", True),
+    "honor-infinities": ("infs", True),
+    "signed-zeros": ("zeros", True),
+    "trapping-math": ("exceptions", True),
+    "rounding-math": ("rounding", True),
+    "math-errno": ("errno", True),
+    "approx-func": ("approx", False),
+    "associative-math": ("assoc", False),
+    "reciprocal-math": ("reciprocal", False),
+  }
+
+  def restrict(names, value):
+    if value:
+      restrictions.update(names)
+    else:
+      restrictions.difference_update(names)
+
+  # Explicit denormal modes are independent of -ffast-math and are not reset
+  # by it. The JIT unconditionally uses preserve-sign for denormals.
+  denormal_modes = {}
+  for arg in arguments:
+    if arg == "-ffast-math" or (arg == "-Ofast" and optimization == "-Ofast"):
+      enabled = True
+      restrictions.clear()
+    elif arg == "-fno-fast-math" or arg.startswith("-ffp-model="):
+      # FP models vary between supported Clang versions (notably 'fast').
+      # Leave their semantics to the frontend until explicitly enabled again.
+      enabled = False
+      restrictions.clear()
+    elif arg.startswith(("-fdenormal-fp-math=", "-fdenormal-fp-math-f32=")):
+      name, value = arg.split("=", 1)
+      denormal_modes[name] = value
+      if name == "-fdenormal-fp-math":
+        denormal_modes.pop("-fdenormal-fp-math-f32", None)
+    elif arg.startswith("-ffp-contract="):
+      restrict(["contract"], arg != "-ffp-contract=fast")
+    elif arg.startswith("-ffp-exception-behavior="):
+      restrict(["exceptions"], arg != "-ffp-exception-behavior=ignore")
+    elif arg.startswith("-f"):
+      negative = arg.startswith("-fno-")
+      name = arg[5:] if negative else arg[2:]
+      if name in individual_options:
+        key, positive_restricts = individual_options[name]
+        restrict([key], positive_restricts != negative)
+      elif name == "finite-math-only":
+        restrict(["nans", "infs"], negative)
+      elif name == "unsafe-math-optimizations":
+        restrict(["assoc", "reciprocal", "zeros", "approx", "contract"], negative)
+        if not negative:
+          restrict(["exceptions"], False)
+
+  return enabled and not restrictions and all(
+    mode in ("preserve-sign", "preserve-sign,preserve-sign")
+    for mode in denormal_modes.values())
+
+
 class llvm_sscp_invocation:
 
   @property
@@ -1953,8 +2019,7 @@ class llvm_sscp_invocation:
       flags += ["-mllvm","-acpp-sscp-export-all"]
 
     sscp_compile_opts = []
-    if ("-Ofast" in self._config.forwarded_compiler_arguments or
-      "-ffast-math" in self._config.forwarded_compiler_arguments):
+    if sscp_fast_math_enabled(self._config.forwarded_compiler_arguments):
       sscp_compile_opts.append("fast-math")
 
     if len(sscp_compile_opts) > 0:
