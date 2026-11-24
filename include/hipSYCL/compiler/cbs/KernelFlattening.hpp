@@ -17,10 +17,13 @@
 namespace hipsycl {
 namespace compiler {
 class KernelFlatteningPassLegacy : public llvm::FunctionPass {
+  bool VerifyBarriers;
+
 public:
   static char ID;
 
-  explicit KernelFlatteningPassLegacy() : llvm::FunctionPass(ID) {}
+  explicit KernelFlatteningPassLegacy(bool VerifyBarriers = true)
+      : llvm::FunctionPass(ID), VerifyBarriers{VerifyBarriers} {}
 
   llvm::StringRef getPassName() const override { return "hipSYCL kernel flattening pass"; }
 
@@ -30,8 +33,10 @@ public:
 };
 
 class KernelFlatteningPass : public llvm::PassInfoMixin<KernelFlatteningPass> {
+  bool VerifyBarriers;
+
 public:
-  explicit KernelFlatteningPass() {}
+  explicit KernelFlatteningPass(bool VerifyBarriers = true) : VerifyBarriers{VerifyBarriers} {}
 
   llvm::PreservedAnalyses run(llvm::Function &F, llvm::FunctionAnalysisManager &AM);
   static bool isRequired() { return false; }

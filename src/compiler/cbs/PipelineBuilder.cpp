@@ -49,7 +49,7 @@ void registerCBSPipelineLegacy(llvm::legacy::PassManagerBase &PM) {
 
   PM.add(new RemoveBarrierCallsPassLegacy{});
 
-  PM.add(new KernelFlatteningPassLegacy{});
+  PM.add(new KernelFlatteningPassLegacy{false});
   PM.add(new LoopsParallelMarkerPassLegacy{});
 }
 #endif // LLVM_VERSION_MAJOR < 16
@@ -89,14 +89,15 @@ void registerCBSPipeline(llvm::ModulePassManager &MPM, OptLevel Opt, bool IsSscp
 #endif
   FPM.addPass(llvm::LoopSimplifyPass{});
 
-  FPM.addPass(CanonicalizeBarriersPass{});
+  // Canonicalize any barriers exposed by the final SSCP flattening pass.
   if (IsSscp)
     FPM.addPass(KernelFlatteningPass{});
+  FPM.addPass(CanonicalizeBarriersPass{});
   FPM.addPass(SubCfgFormationPass{IsSscp});
   FPM.addPass(RemoveBarrierCallsPass{});
 
   if (Opt == OptLevel::O3)
-    FPM.addPass(KernelFlatteningPass{});
+    FPM.addPass(KernelFlatteningPass{false});
   if (Opt != OptLevel::O0)
     FPM.addPass(LoopsParallelMarkerPass{});
   

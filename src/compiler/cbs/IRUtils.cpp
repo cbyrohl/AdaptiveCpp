@@ -125,14 +125,18 @@ llvm::CallInst *createBarrier(llvm::Instruction *InsertBefore, SplitterAnnotatio
 }
 
 bool checkedInlineFunction(llvm::CallBase *CI, llvm::StringRef PassPrefix, int NoInlineDebugLevel) {
+  llvm::InlineFunctionInfo IFI;
+  return checkedInlineFunction(CI, PassPrefix, NoInlineDebugLevel, IFI);
+}
+
+bool checkedInlineFunction(llvm::CallBase *CI, llvm::StringRef PassPrefix, int NoInlineDebugLevel,
+                           llvm::InlineFunctionInfo &IFI) {
   if (CI->getCalledFunction()->isIntrinsic() ||
       CI->getCalledFunction()->getName() == BarrierIntrinsicName)
     return false;
 
   // needed to be valid for success log
   const auto CalleeName = CI->getCalledFunction()->getName().str();
-
-  llvm::InlineFunctionInfo IFI;
 
   llvm::InlineResult ILR = llvm::InlineFunction(*CI, IFI);
   if (!ILR.isSuccess()) {

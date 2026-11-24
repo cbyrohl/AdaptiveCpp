@@ -26,6 +26,7 @@
 #include <llvm/Analysis/DominanceFrontier.h>
 #include <llvm/Analysis/IteratedDominanceFrontier.h>
 #include <llvm/Analysis/PostDominators.h>
+#include <llvm/IR/DiagnosticHandler.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Constant.h>
@@ -1626,6 +1627,9 @@ void SubCfgFormationPassLegacy::getAnalysisUsage(llvm::AnalysisUsage &AU) const 
 }
 
 bool SubCfgFormationPassLegacy::runOnFunction(llvm::Function &F) {
+  const auto *Handler = F.getContext().getDiagHandlerPtr();
+  if (Handler && Handler->HasErrors)
+    return false;
   auto &SAA = getAnalysis<SplitterAnnotationAnalysisLegacy>().getAnnotationInfo();
 
   if (!SAA.isKernelFunc(&F) || getRangeDim(F, false) == 0)
@@ -1649,6 +1653,9 @@ char SubCfgFormationPassLegacy::ID = 0;
 
 llvm::PreservedAnalyses SubCfgFormationPass::run(llvm::Function &F,
                                                  llvm::FunctionAnalysisManager &AM) {
+  const auto *Handler = F.getContext().getDiagHandlerPtr();
+  if (Handler && Handler->HasErrors)
+    return llvm::PreservedAnalyses::all();
   auto &MAM = AM.getResult<llvm::ModuleAnalysisManagerFunctionProxy>(F);
   auto *SAA = MAM.getCachedResult<SplitterAnnotationAnalysis>(*F.getParent());
 

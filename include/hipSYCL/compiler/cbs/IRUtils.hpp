@@ -21,6 +21,7 @@
 namespace llvm {
 class Region;
 class AssumptionCache;
+class InlineFunctionInfo;
 } // namespace llvm
 
 namespace hipsycl::compiler {
@@ -116,6 +117,9 @@ llvm::BasicBlock *getWorkItemLoopBodyEntry(const llvm::Loop *WILoop);
 
 bool checkedInlineFunction(llvm::CallBase *CI, llvm::StringRef PassPrefix,
                            int NoInlineDebugLevel = HIPSYCL_DEBUG_LEVEL_WARNING);
+
+bool checkedInlineFunction(llvm::CallBase *CI, llvm::StringRef PassPrefix, int NoInlineDebugLevel,
+                           llvm::InlineFunctionInfo &IFI);
 
 bool isAnnotatedParallel(llvm::Loop *TheLoop);
 
