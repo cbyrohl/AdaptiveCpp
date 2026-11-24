@@ -678,27 +678,29 @@ bool dontArrayifyContiguousValues(
   HIPSYCL_DEBUG_INFO << "[SubCFG] Cont value? " << I << " IndVar: " << *IndVar << "\n";
   WL.push_back(&I);
   while (!WL.empty()) {
-    auto *WLValue = WL.pop_back_val();
-    if (auto *WLI = llvm::dyn_cast<llvm::Instruction>(WLValue))
-      for (auto *V : WLI->operand_values()) {
-        HIPSYCL_DEBUG_INFO << "[SubCFG] Considering: " << *V << "\n";
+    auto *WLI = WL.pop_back_val();
+    // The load block lacks the predecessor edges needed to recompute a PHI.
+    if (llvm::isa<llvm::PHINode>(WLI))
+      return false;
 
-        if (V == IndVar || VecInfo.isPinned(*V) || llvm::isa<llvm::Constant>(V))
-          continue;
-        // todo: fix PHIs
-        if (LookedAt.contains(V))
-          return false;
-        LookedAt.insert(V);
+    for (auto *V : WLI->operand_values()) {
+      HIPSYCL_DEBUG_INFO << "[SubCFG] Considering: " << *V << "\n";
 
-        // collect cont and uniform source values
-        if (auto *OpI = llvm::dyn_cast<llvm::Instruction>(V)) {
-          if (VecInfo.getVectorShape(*OpI).isContiguousOrStrided()) {
-            WL.push_back(OpI);
-            ContiguousInsts.push_back(OpI);
-          } else if (!UniformValues.contains(OpI))
-            UniformValues.insert(OpI);
-        }
+      if (V == IndVar || VecInfo.isPinned(*V) || llvm::isa<llvm::Constant>(V))
+        continue;
+      if (LookedAt.contains(V))
+        return false;
+      LookedAt.insert(V);
+
+      // collect cont and uniform source values
+      if (auto *OpI = llvm::dyn_cast<llvm::Instruction>(V)) {
+        if (VecInfo.getVectorShape(*OpI).isContiguousOrStrided()) {
+          WL.push_back(OpI);
+          ContiguousInsts.push_back(OpI);
+        } else if (!UniformValues.contains(OpI))
+          UniformValues.insert(OpI);
       }
+    }
   }
   for (auto *UI : UniformValues) {
     HIPSYCL_DEBUG_INFO << "[SubCFG] UniValue to store: " << *UI << "\n";

@@ -4,6 +4,8 @@
 // RUN: %t | FileCheck %s
 // RUN: %acpp %s -o %t --acpp-targets=generic
 // RUN: env ACPP_VISIBILITY_MASK=omp %t | FileCheck %s
+// RUN: env ACPP_VISIBILITY_MASK=omp ACPP_JITOPT_HOST_INLINING_POLICY=llvm \
+// RUN:   ACPP_JITOPT_HOST_PRE_CBS_OPT_LEVEL=3 %t | FileCheck %s
 // RUN: %acpp %s -o %t --acpp-targets=generic -O
 // RUN: env ACPP_VISIBILITY_MASK=omp %t | FileCheck %s
 

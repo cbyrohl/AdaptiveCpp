@@ -51,7 +51,7 @@ Set these options before starting the application. The selected options particip
 * `ACPP_JITOPT_HOST_INLINE_GROWTH` optionally promotes helpers whose estimated duplicate instructions fit this allowance. It estimates expansion from the initial set of forced calls. The default of zero disables promotion. Set a kernel budget before setting the root budget or growth allowance.
 * `ACPP_JITOPT_HOST_INLINE_THRESHOLD` sets LLVM's inliner cost threshold in the host JIT optimization pipelines. A higher value makes LLVM more willing to inline a call. This is an LLVM cost, expressed separately from the budgets measured in IR instructions.
 * `ACPP_JITOPT_HOST_ATTRIBUTOR=1` runs LLVM's Attributor before the host JIT's first optimization pipeline to infer properties such as memory effects and pointer alignment. The default is `0`.
-* `ACPP_JITOPT_HOST_PRE_CBS_OPT_LEVEL` selects the host JIT optimization level before continuation-based synchronization (CBS). Set `1` for the default `-O1` or `3` to try the experimental `-O3` pipeline. Early `-O3` can crash the JIT compiler on kernels with work-group barriers.
+* `ACPP_JITOPT_HOST_PRE_CBS_OPT_LEVEL` selects the host JIT optimization level before continuation-based synchronization (CBS). Set `1` for the default `-O1` or `3` to try the experimental `-O3` pipeline.
 
 Kernel entry points, explicitly always-inlined functions, and helpers whose dependencies may access work-item state retain their normal handling. For example, AdaptiveCpp conservatively keeps inlining helpers with barriers, global references, indirect calls, or unknown external dependencies. Common scalar `fma`, `fabs`, `fmin`, and `fmax` builtins are recognized.
 
