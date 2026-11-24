@@ -36,7 +36,8 @@ public:
       {"host-inline-root-budget", kernel_build_option::host_inline_root_budget},
       {"host-inline-growth", kernel_build_option::host_inline_growth},
       {"host-inline-threshold", kernel_build_option::host_inline_threshold},
-      {"host-attributor", kernel_build_option::host_attributor}
+      {"host-attributor", kernel_build_option::host_attributor},
+      {"host-pre-cbs-opt-level", kernel_build_option::host_pre_cbs_opt_level}
     };
 
     _flags = {

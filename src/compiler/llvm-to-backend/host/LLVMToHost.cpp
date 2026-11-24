@@ -232,13 +232,15 @@ bool LLVMToHostTranslator::optimizeFlavoredIR(llvm::Module& M, PassHandler& PH) 
   if (EnableAttributor)
     MPM.addPass(llvm::AttributorPass{});
 
+  const auto PreCBSLevel =
+      UseO3BeforeCBS ? llvm::OptimizationLevel::O3 : llvm::OptimizationLevel::O1;
   if (InlineThreshold) {
     llvm::PipelineTuningOptions Tuning;
     Tuning.InlinerThreshold = *InlineThreshold;
     llvm::PassBuilder Builder{nullptr, Tuning};
-    MPM.addPass(Builder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O1));
+    MPM.addPass(Builder.buildPerModuleDefaultPipeline(PreCBSLevel));
   } else {
-    MPM.addPass(PH.PassBuilder->buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O1));
+    MPM.addPass(PH.PassBuilder->buildPerModuleDefaultPipeline(PreCBSLevel));
   }
   MPM.run(M, *PH.ModuleAnalysisManager);
 
@@ -610,6 +612,14 @@ bool LLVMToHostTranslator::applyBuildOption(const std::string &Option, const std
   if (Option == "host-attributor" && (Value == "0" || Value == "1")) {
     EnableAttributor = Value == "1";
     return true;
+  }
+  if (Option == "host-pre-cbs-opt-level") {
+    if (Value == "1" || Value == "3") {
+      UseO3BeforeCBS = Value == "3";
+      return true;
+    }
+    registerError("LLVMToHost: host-pre-cbs-opt-level must be 1 or 3");
+    return false;
   }
 
   const llvm::StringRef Input{Value};

@@ -576,7 +576,9 @@ result omp_queue::submit_sscp_kernel_from_code_object(
         {"jitopt_host_inline_root_budget", kernel_build_option::host_inline_root_budget},
         {"jitopt_host_inline_growth", kernel_build_option::host_inline_growth},
         {"jitopt_host_inline_threshold", kernel_build_option::host_inline_threshold},
-        {"jitopt_host_attributor", kernel_build_option::host_attributor}
+        {"jitopt_host_attributor", kernel_build_option::host_attributor},
+        {"jitopt_host_pre_cbs_opt_level",
+         kernel_build_option::host_pre_cbs_opt_level}
     };
     for (const auto &[name, option] : settings) {
       std::string value;
@@ -585,8 +587,21 @@ result omp_queue::submit_sscp_kernel_from_code_object(
     }
     return options;
   }();
-  for (const auto &[option, value] : host_jit_options)
+  for (const auto &[option, value] : host_jit_options) {
+    if (option == kernel_build_option::host_pre_cbs_opt_level) {
+      // An explicit default shares the cache entries of an unset option.
+      if (value == "1")
+        continue;
+      if (value != "3")
+        return make_error(
+            __acpp_here(),
+            error_info{
+                "ACPP_JITOPT_HOST_PRE_CBS_OPT_LEVEL must be 1 or 3, got '" +
+                    value + "'",
+                error_type::invalid_parameter_error});
+    }
     _config.set_build_option(option, value);
+  }
 
   auto binary_configuration_id =
       adaptivity_engine.finalize_binary_configuration(_config);

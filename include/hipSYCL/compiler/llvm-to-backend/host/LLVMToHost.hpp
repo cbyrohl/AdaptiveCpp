@@ -55,6 +55,7 @@ private:
   unsigned InlineGrowth = 0;
   std::optional<int> InlineThreshold;
   bool EnableAttributor = false;
+  bool UseO3BeforeCBS = false;
   host_vector_math_library VectorMathLibary = host_vector_math_library::DEFAULT_VEC_MATH_LIB;
 };
 
