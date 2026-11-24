@@ -26,6 +26,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
+#include <llvm/IR/DiagnosticHandler.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/CallingConv.h>
 #include <llvm/IR/DataLayout.h>
@@ -237,6 +238,7 @@ bool LLVMToHostTranslator::optimizeFlavoredIR(llvm::Module& M, PassHandler& PH) 
 bool LLVMToHostTranslator::translateToBackendFormat(llvm::Module &FlavoredModule,
                                                     std::string &out) {
 
+  bool CBSFailed = false;
   withPassBuilderAndMAM([&](llvm::PassBuilder &PB, llvm::ModuleAnalysisManager &MAM) {
     llvm::ModulePassManager MPM;
     PB.registerAnalysisRegistrationCallback([](llvm::ModuleAnalysisManager &MAM) {
@@ -245,8 +247,14 @@ bool LLVMToHostTranslator::translateToBackendFormat(llvm::Module &FlavoredModule
     PB.registerModuleAnalyses(MAM);
 
     registerCBSPipeline(MPM, hipsycl::compiler::OptLevel::O3, true);
-    HIPSYCL_DEBUG_INFO << "LLVMToHostTranslator: Done registering\n";
+    MPM.run(FlavoredModule, MAM);
+    const auto *Handler = FlavoredModule.getContext().getDiagHandlerPtr();
+    if (Handler && Handler->HasErrors) {
+      CBSFailed = true;
+      return;
+    }
 
+    MPM = llvm::ModulePassManager{};
     llvm::FunctionPassManager FPM;
     FPM.addPass(HostKernelWrapperPass{KnownLocalMemSize, KnownGroupSizeX, KnownGroupSizeY,
                                       KnownGroupSizeZ});
@@ -254,6 +262,10 @@ bool LLVMToHostTranslator::translateToBackendFormat(llvm::Module &FlavoredModule
 
     MPM.run(FlavoredModule, MAM);
   });
+  if (CBSFailed) {
+    registerError("LLVMToHost: CPU barrier lowering failed");
+    return false;
+  }
 
   enableModuleStateDumping(FlavoredModule, "CBS");
 
