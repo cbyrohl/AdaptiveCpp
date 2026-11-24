@@ -14,8 +14,9 @@
 
 #include "../LLVMToBackend.hpp"
 
-#include <vector>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace hipsycl {
 namespace compiler {
@@ -39,12 +40,21 @@ public:
   virtual bool translateToBackendFormat(llvm::Module &FlavoredModule, std::string &out) override;
   virtual bool optimizeFlavoredIR(llvm::Module& M, PassHandler& PH) override;
 protected:
+  bool configureInlining(llvm::Module &M) override;
   virtual bool applyBuildOption(const std::string &Option, const std::string &Value) override;
   virtual bool isKernelAfterFlavoring(llvm::Function& F) override;
   virtual AddressSpaceMap getAddressSpaceMap() const override;
   virtual void migrateKernelProperties(llvm::Function* From, llvm::Function* To) override;
 private:
   std::vector<std::string> KernelNames;
+  std::string NoInlinePatterns;
+  std::string ForceInlinePatterns;
+  bool UseLLVMInliner = false;
+  std::optional<unsigned> InlineBudget;
+  std::optional<unsigned> InlineRootBudget;
+  unsigned InlineGrowth = 0;
+  std::optional<int> InlineThreshold;
+  bool EnableAttributor = false;
   host_vector_math_library VectorMathLibary = host_vector_math_library::DEFAULT_VEC_MATH_LIB;
 };
 

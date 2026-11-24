@@ -13,6 +13,7 @@
 #include "hipSYCL/common/debug.hpp"
 #include "hipSYCL/compiler/cbs/IRUtils.hpp"
 #include "hipSYCL/compiler/cbs/SplitterAnnotationAnalysis.hpp"
+#include "hipSYCL/compiler/llvm-to-backend/GlobalInliningAttributorPass.hpp"
 
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/IR/Dominators.h>
@@ -26,7 +27,9 @@ bool inlineCallsInBasicBlock(llvm::BasicBlock &BB) {
     LastChanged = false;
     for (auto &I : BB) {
       if (auto *CallI = llvm::dyn_cast<llvm::CallBase>(&I)) {
-        if (CallI->getCalledFunction()) {
+        auto *Callee = CallI->getCalledFunction();
+        if (Callee && !Callee->hasFnAttribute(HostSkipForcedInliningAttr) &&
+            !CallI->getAttributes().hasFnAttr(HostSkipForcedInliningAttr)) {
           LastChanged = hipsycl::compiler::utils::checkedInlineFunction(CallI, "[KernelFlattening]",
                                                                         HIPSYCL_DEBUG_LEVEL_INFO);
           if (LastChanged)

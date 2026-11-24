@@ -399,7 +399,7 @@ if(WITH_SSCP_COMPILER)
 
     add_hipsycl_llvm_backend(
       BACKEND host
-      LIBRARY host/LLVMToHost.cpp host/HostKernelWrapperPass.cpp host/StaticLocalMemoryPass.cpp
+      LIBRARY host/LLVMToHost.cpp host/HostInliningPolicy.cpp host/HostKernelWrapperPass.cpp host/StaticLocalMemoryPass.cpp
       TOOL host/LLVMToHostTool.cpp)
 
     if(WIN32)

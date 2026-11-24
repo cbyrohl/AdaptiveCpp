@@ -59,7 +59,16 @@ enum class kernel_build_option : int {
 
   host_vector_math_library,
 
-  metal_max_args_for_flat_mode
+  metal_max_args_for_flat_mode,
+
+  host_no_inline,
+  host_inlining_policy,
+  host_force_inline,
+  host_inline_budget,
+  host_inline_root_budget,
+  host_inline_growth,
+  host_inline_threshold,
+  host_attributor
 };
 
 enum class kernel_build_flag : int {

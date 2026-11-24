@@ -33,7 +33,8 @@ llvm::PreservedAnalyses GlobalInliningAttributorPass::run(llvm::Module &M,
       // Ignore undefined functions
       if(!F.empty()) {
         F.setLinkage(llvm::GlobalValue::InternalLinkage);
-        if(!F.hasFnAttribute(llvm::Attribute::AlwaysInline))
+        if (!F.hasFnAttribute(HostSkipForcedInliningAttr) &&
+            !F.hasFnAttribute(llvm::Attribute::AlwaysInline))
           F.addFnAttr(llvm::Attribute::AlwaysInline);
       }
     }

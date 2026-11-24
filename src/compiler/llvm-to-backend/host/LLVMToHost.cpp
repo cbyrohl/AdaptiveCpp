@@ -42,6 +42,7 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Transforms/IPO/Attributor.h>
 #if LLVM_VERSION_MAJOR < 16
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/Host.h>
@@ -227,8 +228,18 @@ bool LLVMToHostTranslator::optimizeFlavoredIR(llvm::Module& M, PassHandler& PH) 
       });
 #endif
 
-  llvm::ModulePassManager MPM =
-      PH.PassBuilder->buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O1);
+  llvm::ModulePassManager MPM;
+  if (EnableAttributor)
+    MPM.addPass(llvm::AttributorPass{});
+
+  if (InlineThreshold) {
+    llvm::PipelineTuningOptions Tuning;
+    Tuning.InlinerThreshold = *InlineThreshold;
+    llvm::PassBuilder Builder{nullptr, Tuning};
+    MPM.addPass(Builder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O1));
+  } else {
+    MPM.addPass(PH.PassBuilder->buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O1));
+  }
   MPM.run(M, *PH.ModuleAnalysisManager);
 
   return true;
@@ -324,6 +335,11 @@ bool LLVMToHostTranslator::translateToBackendFormat(llvm::Module &FlavoredModule
 
   if(!OptCpuFlag.empty())
     OptInvocation.push_back(OptCpuFlag);
+  std::string ThresholdFlag;
+  if (InlineThreshold) {
+    ThresholdFlag = "-inline-threshold=" + std::to_string(*InlineThreshold);
+    OptInvocation.push_back(ThresholdFlag);
+  }
 
   llvm::SmallVector<llvm::StringRef, 16> LlcInvocation{LLCPath,
                                                     "-O3",
@@ -578,6 +594,50 @@ bool LLVMToHostTranslator::applyBuildOption(const std::string &Option, const std
   if (Option == "host-vector-math-library") {
     VectorMathLibary = static_cast<host_vector_math_library>(std::stoi(Value));
     return true;
+  }
+  if (Option == "host-no-inline") {
+    NoInlinePatterns = Value;
+    return true;
+  }
+  if (Option == "host-force-inline") {
+    ForceInlinePatterns = Value;
+    return true;
+  }
+  if (Option == "host-inlining-policy" && (Value == "llvm" || Value == "force")) {
+    UseLLVMInliner = Value == "llvm";
+    return true;
+  }
+  if (Option == "host-attributor" && (Value == "0" || Value == "1")) {
+    EnableAttributor = Value == "1";
+    return true;
+  }
+
+  const llvm::StringRef Input{Value};
+  unsigned Size = 0;
+  if (!Input.getAsInteger(10, Size)) {
+    if (Option == "host-inline-budget") {
+      InlineBudget = Size;
+      return true;
+    }
+    if (Option == "host-inline-root-budget") {
+      InlineRootBudget = Size;
+      return true;
+    }
+    if (Option == "host-inline-growth") {
+      InlineGrowth = Size;
+      return true;
+    }
+  }
+  int Threshold = 0;
+  if (Option == "host-inline-threshold" &&
+      !Input.getAsInteger(10, Threshold) && Threshold >= 0) {
+    InlineThreshold = Threshold;
+    return true;
+  }
+  if (Option == "host-inlining-policy" || Option == "host-attributor" ||
+      Option == "host-inline-budget" || Option == "host-inline-root-budget" ||
+      Option == "host-inline-growth" || Option == "host-inline-threshold") {
+    registerError("LLVMToHost: Invalid value for " + Option + ": " + Value);
   }
   return false;
 }

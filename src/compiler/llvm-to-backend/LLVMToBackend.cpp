@@ -364,6 +364,8 @@ bool LLVMToBackendTranslator::prepareIR(llvm::Module &M) {
     // First inling stage is prior to backend flavoring. This helps
     // for some backends which introduces call conventions that complicate inlining
     // (e.g. spir_func)
+    if (!configureInlining(M))
+      return false;
     GlobalInliningAttributorPass InliningPass{Kernels};
     InliningPass.run(M, MAM);
     MAM.clear();

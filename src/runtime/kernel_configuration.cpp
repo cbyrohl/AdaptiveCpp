@@ -28,7 +28,15 @@ public:
       {"amdgpu-target-device", kernel_build_option::amdgpu_target_device},
       {"spirv-dynamic-local-mem-allocation-size", kernel_build_option::spirv_dynamic_local_mem_allocation_size},
       {"host-vector-math-library", kernel_build_option::host_vector_math_library},
-      {"metal-max-args-for-flat-mode", kernel_build_option::metal_max_args_for_flat_mode}
+      {"metal-max-args-for-flat-mode", kernel_build_option::metal_max_args_for_flat_mode},
+      {"host-no-inline", kernel_build_option::host_no_inline},
+      {"host-inlining-policy", kernel_build_option::host_inlining_policy},
+      {"host-force-inline", kernel_build_option::host_force_inline},
+      {"host-inline-budget", kernel_build_option::host_inline_budget},
+      {"host-inline-root-budget", kernel_build_option::host_inline_root_budget},
+      {"host-inline-growth", kernel_build_option::host_inline_growth},
+      {"host-inline-threshold", kernel_build_option::host_inline_threshold},
+      {"host-attributor", kernel_build_option::host_attributor}
     };
 
     _flags = {

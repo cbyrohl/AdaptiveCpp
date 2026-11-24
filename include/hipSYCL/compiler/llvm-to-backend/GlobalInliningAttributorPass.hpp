@@ -18,6 +18,8 @@
 namespace hipsycl {
 namespace compiler {
 
+inline constexpr char HostSkipForcedInliningAttr[] = "acpp.host.skip_forced_inlining";
+
 class GlobalInliningAttributorPass : public llvm::PassInfoMixin<GlobalInliningAttributorPass> {
 public:
   GlobalInliningAttributorPass(const std::vector<std::string>& KernelName);

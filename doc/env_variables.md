@@ -39,6 +39,21 @@
   * `sleef`: Use SLEEF.
   * `armpl`: Use amath from Arm Performance Libraries.
 
+### Generic OpenMP JIT inlining
+
+Set these options before starting the application. The selected options participate in the JIT cache key.
+
+* `ACPP_JITOPT_HOST_INLINING_POLICY` defaults to `force`. Set it to `llvm` to let LLVM decide whether to inline eligible helpers.
+* `ACPP_JITOPT_HOST_NO_INLINE` keeps eligible matching helpers out of line. For example, `ACPP_JITOPT_HOST_NO_INLINE=compareExact` matches functions containing `compareExact` in their LLVM names.
+* `ACPP_JITOPT_HOST_FORCE_INLINE` forces matching helpers inline in `llvm` and budget modes. Explicit exclusions take precedence. Both name selectors accept comma-separated substrings of the usually mangled LLVM names.
+* `ACPP_JITOPT_HOST_INLINE_BUDGET` selects budget mode. The JIT force-inlines eligible helpers whose estimated expanded IR instruction count fits this budget. Larger helpers stay out of line unless selected by the force-inline list or growth allowance.
+* `ACPP_JITOPT_HOST_INLINE_ROOT_BUDGET` allows a larger instruction budget inside out-of-line helpers. It defaults to the kernel budget and only takes effect when set to a larger value.
+* `ACPP_JITOPT_HOST_INLINE_GROWTH` optionally promotes helpers whose estimated duplicate instructions fit this allowance. It estimates expansion from the initial set of forced calls. The default of zero disables promotion. Set a kernel budget before setting the root budget or growth allowance.
+* `ACPP_JITOPT_HOST_INLINE_THRESHOLD` sets LLVM's inliner cost threshold in the host JIT optimization pipelines. A higher value makes LLVM more willing to inline a call. This is an LLVM cost, expressed separately from the budgets measured in IR instructions.
+* `ACPP_JITOPT_HOST_ATTRIBUTOR=1` runs LLVM's Attributor before the host JIT's first optimization pipeline to infer properties such as memory effects and pointer alignment. The default is `0`.
+
+Kernel entry points, explicitly always-inlined functions, and helpers whose dependencies may access work-item state retain their normal handling. For example, AdaptiveCpp conservatively keeps inlining helpers with barriers, global references, indirect calls, or unknown external dependencies. Common scalar `fma`, `fabs`, `fmin`, and `fmax` builtins are recognized.
+
 ## Environment variables to control dumping IR during JIT compilation
 
 AdaptiveCpp can dump the IR of the code during stage 2 compilation (JIT compilation) at various stages in the processing and optimization pipeline.

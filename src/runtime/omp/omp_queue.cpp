@@ -11,6 +11,7 @@
 #include "hipSYCL/runtime/omp/omp_queue.hpp"
 
 #include "hipSYCL/common/debug.hpp"
+#include "hipSYCL/common/settings.hpp"
 #include "hipSYCL/common/spin_lock.hpp"
 #include "hipSYCL/runtime/application.hpp"
 #include "hipSYCL/runtime/error.hpp"
@@ -564,6 +565,28 @@ result omp_queue::submit_sscp_kernel_from_code_object(
   if(host_veclib.has_value())
     _config.set_build_option(kernel_build_option::host_vector_math_library,
         static_cast<int>(*host_veclib));
+
+  static const auto host_jit_options = [] {
+    std::vector<std::pair<kernel_build_option, std::string>> options;
+    const std::pair<const char *, kernel_build_option> settings[] = {
+        {"jitopt_host_no_inline", kernel_build_option::host_no_inline},
+        {"jitopt_host_inlining_policy", kernel_build_option::host_inlining_policy},
+        {"jitopt_host_force_inline", kernel_build_option::host_force_inline},
+        {"jitopt_host_inline_budget", kernel_build_option::host_inline_budget},
+        {"jitopt_host_inline_root_budget", kernel_build_option::host_inline_root_budget},
+        {"jitopt_host_inline_growth", kernel_build_option::host_inline_growth},
+        {"jitopt_host_inline_threshold", kernel_build_option::host_inline_threshold},
+        {"jitopt_host_attributor", kernel_build_option::host_attributor}
+    };
+    for (const auto &[name, option] : settings) {
+      std::string value;
+      if (common::settings::try_retrieve_settings_variable(name, value) && !value.empty())
+        options.emplace_back(option, std::move(value));
+    }
+    return options;
+  }();
+  for (const auto &[option, value] : host_jit_options)
+    _config.set_build_option(option, value);
 
   auto binary_configuration_id =
       adaptivity_engine.finalize_binary_configuration(_config);

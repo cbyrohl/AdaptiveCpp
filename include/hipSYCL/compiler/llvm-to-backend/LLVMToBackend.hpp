@@ -194,6 +194,9 @@ protected:
   virtual bool toBackendFlavor(llvm::Module &M, PassHandler& PH) = 0;
   virtual bool translateToBackendFormat(llvm::Module& FlavoredModule, std::string& out) = 0;
 
+  // Runs after specialization and before the first inlining stage.
+  virtual bool configureInlining(llvm::Module &) {return true;}
+
   // By default, just runs regular O3 pipeline. Backends may override
   // if they want to do something more specific.
   virtual bool optimizeFlavoredIR(llvm::Module& M, PassHandler& PH);
