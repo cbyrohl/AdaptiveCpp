@@ -68,7 +68,8 @@ enum class kernel_build_option : int {
   host_inline_root_budget,
   host_inline_growth,
   host_inline_threshold,
-  host_attributor
+  host_attributor,
+  host_cpu_target
 };
 
 enum class kernel_build_flag : int {

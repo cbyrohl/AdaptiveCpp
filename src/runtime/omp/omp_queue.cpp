@@ -576,7 +576,8 @@ result omp_queue::submit_sscp_kernel_from_code_object(
         {"jitopt_host_inline_root_budget", kernel_build_option::host_inline_root_budget},
         {"jitopt_host_inline_growth", kernel_build_option::host_inline_growth},
         {"jitopt_host_inline_threshold", kernel_build_option::host_inline_threshold},
-        {"jitopt_host_attributor", kernel_build_option::host_attributor}
+        {"jitopt_host_attributor", kernel_build_option::host_attributor},
+        {"jitopt_host_cpu_target", kernel_build_option::host_cpu_target}
     };
     for (const auto &[name, option] : settings) {
       std::string value;

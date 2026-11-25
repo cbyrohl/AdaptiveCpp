@@ -46,9 +46,11 @@
 #if LLVM_VERSION_MAJOR < 16
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/Host.h>
+#include <llvm/Support/X86TargetParser.h>
 #else
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
+#include <llvm/TargetParser/X86TargetParser.h>
 #endif
 
 #include <cassert>
@@ -322,8 +324,19 @@ bool LLVMToHostTranslator::translateToBackendFormat(llvm::Module &FlavoredModule
   const std::string LLCPath = getLLCPath();
   const std::string LLDPath = getLLDPath();
 
-  const std::string LlcCpuFlag = ACPP_LLC_HOST_CPU_FLAG;
-  const std::string OptCpuFlag = ACPP_OPT_HOST_CPU_FLAG;
+  const llvm::Triple HostTriple{llvm::sys::getProcessTriple()};
+  if (!HostCpuTarget.empty() && HostTriple.isX86() && HostCpuTarget != "native" &&
+      HostCpuTarget != "generic" &&
+      llvm::X86::parseArchX86(HostCpuTarget, HostTriple.isArch64Bit()) == llvm::X86::CK_None) {
+    this->registerError("LLVMToHost: Unknown x86 CPU target '" + HostCpuTarget +
+                        "' in ACPP_JITOPT_HOST_CPU_TARGET");
+    return false;
+  }
+
+  const std::string LlcCpuFlag =
+      HostCpuTarget.empty() ? ACPP_LLC_HOST_CPU_FLAG : "-mcpu=" + HostCpuTarget;
+  const std::string OptCpuFlag =
+      HostCpuTarget.empty() ? ACPP_OPT_HOST_CPU_FLAG : "--mcpu=" + HostCpuTarget;
 
 
   llvm::SmallVector<llvm::StringRef, 16> OptInvocation{OptPath,
@@ -591,6 +604,10 @@ bool LLVMToHostTranslator::translateToBackendFormat(llvm::Module &FlavoredModule
 }
 
 bool LLVMToHostTranslator::applyBuildOption(const std::string &Option, const std::string &Value) {
+  if (Option == "host-cpu-target") {
+    HostCpuTarget = Value;
+    return true;
+  }
   if (Option == "host-vector-math-library") {
     VectorMathLibary = static_cast<host_vector_math_library>(std::stoi(Value));
     return true;
