@@ -679,13 +679,15 @@ bool dontArrayifyContiguousValues(
   WL.push_back(&I);
   while (!WL.empty()) {
     auto *WLValue = WL.pop_back_val();
+    // A copied PHI would refer to predecessors outside the load block.
+    if (llvm::isa<llvm::PHINode>(WLValue))
+      return false;
     if (auto *WLI = llvm::dyn_cast<llvm::Instruction>(WLValue))
       for (auto *V : WLI->operand_values()) {
         HIPSYCL_DEBUG_INFO << "[SubCFG] Considering: " << *V << "\n";
 
         if (V == IndVar || VecInfo.isPinned(*V) || llvm::isa<llvm::Constant>(V))
           continue;
-        // todo: fix PHIs
         if (LookedAt.contains(V))
           return false;
         LookedAt.insert(V);
